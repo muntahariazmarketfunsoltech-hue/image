@@ -2292,8 +2292,11 @@ def get_active_image_ad_candidate_once(page):
         root_box = root["box"]
         root_records = extract_template_ad_records_from_target(root_frame)
 
-        # Strict scoped packages only from this visible root.
-        scoped_packages = extract_packages_from_target_and_ancestors(root_frame, page=page, max_depth=1)
+        # Start with package data on the visible root; each image target below
+        # also contributes package data from its own frame and ancestors.
+        root_scoped_packages = extract_packages_from_target_and_ancestors(
+            root_frame, page=page, max_depth=1
+        )
 
         for target in _frame_descendants_including_self(root_frame, max_depth=5):
             try:
@@ -2305,6 +2308,16 @@ def get_active_image_ad_candidate_once(page):
                 if image_url == "N/A":
                     continue
 
+                # App links/package IDs are often exposed inside the nested
+                # creative frame rather than on the top-level safeframe.
+                # Keep the search bounded to this active ad's frame ancestry.
+                scoped_packages = set(root_scoped_packages or set())
+                scoped_packages.update(
+                    extract_packages_from_target_and_ancestors(
+                        target, page=page, max_depth=6
+                    )
+                )
+
                 text_data = extract_image_ad_text_quick_from_target(target, image_data)
                 headline = clean_text(text_data.get("headline"))
                 description = clean_text(text_data.get("description"))
@@ -2315,7 +2328,6 @@ def get_active_image_ad_candidate_once(page):
 
                 template_package = _extract_package_from_template_record(best_record) if best_record else "N/A"
                 if template_package != "N/A":
-                    scoped_packages = set(scoped_packages or set())
                     scoped_packages.add(template_package)
 
                 # Use visible text first. Template text is only fallback.
